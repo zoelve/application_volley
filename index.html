@@ -120,6 +120,8 @@ body{background:var(--bg);color:var(--ink);font-family:'Karla',sans-serif;min-he
 .today-hero-meta{font-size:.78rem;opacity:.85;margin-bottom:12px;}
 .ex-pill-list{display:flex;flex-direction:column;gap:4px;}
 .ex-pill{background:rgba(255,255,255,.15);border-radius:7px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;font-size:.81rem;}
+.ex-pill-link{cursor:pointer;transition:background .15s;}
+.ex-pill-link:active{background:rgba(255,255,255,.28);}
 .ex-pill-cat{font-size:.66rem;opacity:.75;font-family:'JetBrains Mono',monospace;}
 .today-upcoming-card{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 
@@ -831,7 +833,7 @@ function renderToday(){
         </div>
         <div class="today-hero-title">${s.title}</div>
         <div class="today-hero-meta">${exs.length} exercice${exs.length!==1?'s':''} · ~${totalMin} min</div>
-        ${!cancelled?`<div class="ex-pill-list">${exs.map(e=>`<div class="ex-pill"><span>${e.name}</span><span class="ex-pill-cat">${e.cat}</span></div>`).join('')}</div>`:''}
+        ${!cancelled?`<div class="ex-pill-list">${exs.map(e=>`<div class="ex-pill${e.tiktok?' ex-pill-link':''}"${e.tiktok?` onclick="openExerciseVideo('${e.id}')" title="Voir la vidéo"`:''}><span>${e.tiktok?'🎵 ':''}${e.name}</span><span class="ex-pill-cat">${e.cat}</span></div>`).join('')}</div>`:''}
       </div>`;
     });
   } else if(!todayMatches.length){
@@ -944,6 +946,7 @@ function renderExCard(ex){
 }
 function isRecent(id){return[...teamSessions()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,2).some(s=>s.exercises.includes(id));}
 function toggleFav(id){const e=exercises.find(x=>x.id===id);if(e){e.fav=!e.fav;saveAll();sbSaveExercise(e);renderLibrary();}}
+function openExerciseVideo(id){const e=exercises.find(x=>x.id===id);if(e&&e.tiktok)window.open(e.tiktok,'_blank','noopener');}
 function deleteEx(id){if(!confirm('Supprimer ?'))return;exercises=exercises.filter(e=>e.id!==id);saveAll();sbDeleteExercise(id);renderLibrary();}
 
 // ══ CALENDAR ════════════════════════════════════════════════
