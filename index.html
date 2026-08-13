@@ -528,6 +528,8 @@ function saveAll(){
 }
 function currentTeam(){return teams.find(t=>t.id===currentTeamId)||null;}
 function teamPlayers(){return currentTeamId?players.filter(p=>p.teamId===currentTeamId):players;}
+function teamName(id){const t=teams.find(x=>x.id===id);return t?t.name:'';}
+function teamShort(id){const n=teamName(id);return n?n.slice(0,2).toUpperCase():'';}
 function teamSessions(){return currentTeamId?sessions.filter(s=>s.teamId===currentTeamId):sessions;}
 
 // ══════════════════════════════════════════════════════════════
@@ -892,7 +894,7 @@ function renderToday(){
 
 // ══ REVIEW ══════════════════════════════════════════════════
 function renderReviewBlock(s,rev){
-  const tp=teamPlayers();
+  const tp=players.filter(p=>p.teamId===s.teamId);
   const chips=tp.map(p=>`<span class="player-chip${rev.absents&&rev.absents.includes(p.id)?' absent':''}" onclick="toggleAbsent('${s.id}','${p.id}')">${p.name}</span>`).join('');
   const stars=[1,2,3,4,5].map(i=>`<span class="star${rev.stars>=i?' on':''}" onclick="setStars('${s.id}',${i})">⭐</span>`).join('');
   return `<div class="review-section">
@@ -987,9 +989,10 @@ function renderCalendar(){
 
 function renderCalGrid(){
   const today=toDateStr(new Date());
-  const ts=teamSessions();
-  const tm=matches.filter(m=>!m.teamId||m.teamId===currentTeamId);
+  const ts=sessions;
+  const tm=matches;
   const fm=ffvbForTeam();
+  const multiTeam=teams.length>1;
   const first=new Date(calY,calM,1);
   let dow=first.getDay();dow=dow===0?6:dow-1;
   const dim=new Date(calY,calM+1,0).getDate();
@@ -1006,8 +1009,8 @@ function renderCalGrid(){
     const fs=fm.filter(f=>f.date===ds);
     const hasEv=ss.length||ms.length||fs.length;
     const cls='cal-cell'+(ds===today?' today':'')+(hasEv?' has-event':'');
-    const dots=ss.map(s=>{const rev=reviews[s.id]||{};return`<div class="cal-dot ${rev.cancelled?'cancelled':'sess'}">${s.title.slice(0,8)}</div>`;}).join('')
-      +ms.map(m=>`<div class="cal-dot ${m.type==='plateau'?'plateau':m.type==='arbitrage'?'arb':'match'}">${m.type==='plateau'?'Plateau':m.type==='arbitrage'?'🟡 Arb.':m.opponent?.slice(0,8)||'Match'}</div>`).join('')
+    const dots=ss.map(s=>{const rev=reviews[s.id]||{};const pre=multiTeam?teamShort(s.teamId)+' ':'';return`<div class="cal-dot ${rev.cancelled?'cancelled':'sess'}" title="${teamName(s.teamId)} — ${s.title}">${pre}${s.title.slice(0,8)}</div>`;}).join('')
+      +ms.map(m=>{const pre=multiTeam?teamShort(m.teamId)+' ':'';return`<div class="cal-dot ${m.type==='plateau'?'plateau':m.type==='arbitrage'?'arb':'match'}" title="${teamName(m.teamId)}">${pre}${m.type==='plateau'?'Plateau':m.type==='arbitrage'?'🟡 Arb.':m.opponent?.slice(0,8)||'Match'}</div>`;}).join('')
       +fs.map(f=>`<div class="cal-dot ffvb">${f.domicile?'Dom.':'Ext.'} FFVB</div>`).join('');
     return`<div class="${cls}" onclick="showDay('${ds}')"><div class="cal-num">${d}</div>${dots}</div>`;
   }).join('');
@@ -1020,9 +1023,10 @@ function renderCalGrid(){
 }
 
 function renderCalList(mode){
-  const ts=teamSessions();
-  const tm=matches.filter(m=>!m.teamId||m.teamId===currentTeamId);
+  const ts=sessions;
+  const tm=matches;
   const fm=ffvbForTeam();
+  const multiTeam=teams.length>1;
   let items=[];
   if(mode==='seances'){
     items=ts.map(s=>({date:s.date, kind:'sess', ref:s}));
@@ -1049,7 +1053,7 @@ function renderCalList(mode){
       html+=`<div class="cal-list-item" onclick="switchView('calendar');setTimeout(()=>{setCalMode('mois');showDay('${s.date}');},0)">
         <div class="cal-list-date">${dayLbl}</div>
         <div class="cal-list-dot" style="background:${rev.cancelled?'#aaa':'var(--accent)'}"></div>
-        <div class="cal-list-body"><div class="cal-list-title">${rev.cancelled?'❌ ':''}${s.title}</div><div class="cal-list-sub">Séance${rev.stars?' · '+'⭐'.repeat(rev.stars):''}</div></div>
+        <div class="cal-list-body"><div class="cal-list-title">${rev.cancelled?'❌ ':''}${s.title}</div><div class="cal-list-sub">Séance${multiTeam?' · '+teamName(s.teamId):''}${rev.stars?' · '+'⭐'.repeat(rev.stars):''}</div></div>
       </div>`;
     } else if(it.kind==='match'){
       const m=it.ref; const r=getMatchResult(m);
@@ -1058,7 +1062,7 @@ function renderCalList(mode){
       html+=`<div class="cal-list-item" onclick="switchView('matches')">
         <div class="cal-list-date">${dayLbl}</div>
         <div class="cal-list-dot" style="background:${dotColor}"></div>
-        <div class="cal-list-body"><div class="cal-list-title">${title}</div><div class="cal-list-sub">${m.type==='plateau'?'Plateau':m.type==='arbitrage'?'Arbitrage':'Match'} · ${r.score}</div></div>
+        <div class="cal-list-body"><div class="cal-list-title">${title}</div><div class="cal-list-sub">${m.type==='plateau'?'Plateau':m.type==='arbitrage'?'Arbitrage':'Match'} · ${r.score}${multiTeam?' · '+teamName(m.teamId):''}</div></div>
       </div>`;
     } else {
       const f=it.ref;
@@ -1075,11 +1079,12 @@ function renderCalList(mode){
 
 function chMonth(d){calM+=d;if(calM>11){calM=0;calY++;}if(calM<0){calM=11;calY--;}renderCalendar();}
 function showDay(ds){
-  const ts=teamSessions();
-  const tm=matches.filter(m=>!m.teamId||m.teamId===currentTeamId);
+  const ts=sessions;
+  const tm=matches;
   const fm=ffvbForTeam().filter(f=>f.date===ds);
   const ss=ts.filter(s=>s.date===ds);
   const ms=tm.filter(m=>m.date===ds);
+  const multiTeam=teams.length>1;
   const el=document.getElementById('sess-detail');
   if(!el) return;
   const dobj=new Date(ds+'T12:00:00');
@@ -1111,7 +1116,7 @@ function showDay(ds){
         <div>
           <div style="font-size:.68rem;color:var(--ink-faint);text-transform:uppercase;margin-bottom:3px">${m.type==='plateau'?'🏅 Plateau':m.type==='arbitrage'?'🟡 Arbitrage':'🏆 Match'} · ${label}</div>
           <div class="match-vs">${m.type==='plateau'?m.plateauName||'Plateau':m.type==='arbitrage'?(m.arbTeamA+' – '+m.arbTeamB):m.opponent}</div>
-          <div class="match-meta"><span class="tag ${roleTag(m.role)}">${m.role}</span></div>
+          <div class="match-meta"><span class="tag ${roleTag(m.role)}">${m.role}</span>${multiTeam&&m.teamId?`<span class="tag">${teamName(m.teamId)}</span>`:''}</div>
         </div>
         <div style="text-align:right">
           <div class="match-score">${result.score}</div>
@@ -1137,7 +1142,7 @@ function showDay(ds){
     </div>`:'';
     html+=`<div class="sess-card${rev.cancelled?' cancelled-card':''}">
       <div class="sess-card-head">
-        <div><div class="sess-card-title">${rev.cancelled?'❌ ':''} ${s.title}</div><div class="sess-card-date">${label}</div></div>
+        <div><div class="sess-card-title">${rev.cancelled?'❌ ':''} ${s.title}</div><div class="sess-card-date">${label}${multiTeam?' · '+teamName(s.teamId):''}</div></div>
         <div style="display:flex;gap:5px;flex-shrink:0">
           <button class="btn btn-ghost btn-sm" onclick="openEditSessionModal('${s.id}')">✏️</button>
           <button class="btn btn-danger btn-sm" onclick="deleteSess('${s.id}')">🗑</button>
