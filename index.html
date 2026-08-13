@@ -836,6 +836,7 @@ function renderToday(){
         ${!cancelled?`<div class="ex-pill-list">${exs.map(e=>`<div class="ex-pill${e.tiktok?' ex-pill-link':''}"${e.tiktok?` onclick="openExerciseVideo('${e.id}')" title="Voir la vidéo"`:''}><span>${e.tiktok?'🎵 ':''}${e.name}</span><span class="ex-pill-cat">${e.cat}</span></div>`).join('')}</div>`:''}
       </div>`;
     });
+    html+=`<button class="btn btn-outline btn-sm" style="margin-bottom:10px" onclick="openAddSessionModal('${today}')">+ Ajouter une autre séance</button>`;
   } else if(!todayMatches.length){
     html+=`<div class="card" style="text-align:center;padding:24px">
       <div style="font-size:1.8rem;margin-bottom:7px">😴</div>
@@ -1147,6 +1148,7 @@ function showDay(ds){
       <div style="margin-top:10px">${renderReviewBlock(s,rev)}</div>
     </div>`;
   });
+  html+=`<button class="btn btn-outline btn-sm" style="margin-top:2px" onclick="openAddSessionModal('${ds}')">+ Ajouter une autre séance</button>`;
   el.innerHTML=html;
 }
 function deleteSess(id){if(!confirm('Supprimer ?'))return;sessions=sessions.filter(s=>s.id!==id);saveAll();sbDeleteSession(id);renderCalendar();}
