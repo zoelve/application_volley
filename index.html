@@ -335,10 +335,20 @@ select option{background:var(--card);}
 <div class="modal-overlay" id="modal-session">
   <div class="modal"><div class="modal-handle"></div>
     <div class="modal-title" id="modal-session-title">Planifier une séance</div>
-    <div class="form-group"><label>Équipe</label><select id="sess-team"></select></div>
+    <div class="form-group"><label>Équipe</label><select id="sess-team" onchange="onSessTeamChange()"></select></div>
     <div class="form-group"><label>Date</label><input id="sess-date" type="date"></div>
     <div class="form-group"><label>Titre</label><input id="sess-title" type="text" placeholder="ex: Travail de réception"></div>
     <div class="form-group"><label>Exercices</label><div class="picker-list" id="ex-picker"></div><div id="repeat-warn"></div></div>
+
+    <div class="section-title" style="margin-top:6px">📋 Bilan de séance</div>
+    <label class="cancel-toggle"><input type="checkbox" id="m-rev-cancelled" onchange="onModalCancelledChange()"> Séance annulée</label>
+    <div id="m-rev-fields">
+      <div class="form-group"><label>Niveau du groupe</label><div class="stars" id="m-rev-stars"></div></div>
+      <div class="form-group"><label>Absents</label><div class="absent-grid" id="m-rev-absents"></div></div>
+      <div class="form-group"><label>Présents</label><input type="number" min="0" max="30" id="m-rev-attendance" placeholder="—" style="width:100px"></div>
+      <div class="form-group"><label>Notes rapides</label><textarea id="m-rev-note" rows="2" placeholder="Observations, points à retravailler…"></textarea></div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-session')">Annuler</button>
       <button class="btn btn-primary" id="sess-save-btn" onclick="saveSession()">Planifier</button>
@@ -1539,10 +1549,30 @@ function saveExercise(){const name=document.getElementById('ex-name').value.trim
 // ══ SESSION MODAL ════════════════════════════════════════════
 let pickerSel=[];
 let editingSessId=null;
+let modalRevStars=0;
+let modalRevAbsents=[];
 function populateSessTeamSelect(selectedId){
   const sel=document.getElementById('sess-team');
   sel.innerHTML=teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
   sel.value=selectedId||currentTeamId||(teams[0]?.id||'');
+}
+function onSessTeamChange(){ renderModalAbsentChips(); }
+function renderModalStars(){
+  document.getElementById('m-rev-stars').innerHTML=[1,2,3,4,5].map(i=>`<span class="star${modalRevStars>=i?' on':''}" onclick="setModalStars(${i})">⭐</span>`).join('');
+}
+function setModalStars(n){ modalRevStars=modalRevStars===n?0:n; renderModalStars(); }
+function renderModalAbsentChips(){
+  const teamId=document.getElementById('sess-team').value;
+  const tp=players.filter(p=>p.teamId===teamId);
+  document.getElementById('m-rev-absents').innerHTML=tp.length?tp.map(p=>`<span class="player-chip${modalRevAbsents.includes(p.id)?' absent':''}" onclick="toggleModalAbsent('${p.id}')">${p.name}</span>`).join(''):'<div style="font-size:.78rem;color:var(--ink-faint)">Aucun joueur dans cette équipe.</div>';
+}
+function toggleModalAbsent(pid){
+  const i=modalRevAbsents.indexOf(pid);
+  if(i>-1) modalRevAbsents.splice(i,1); else modalRevAbsents.push(pid);
+  renderModalAbsentChips();
+}
+function onModalCancelledChange(){
+  document.getElementById('m-rev-fields').style.display=document.getElementById('m-rev-cancelled').checked?'none':'';
 }
 function openAddSessionModal(ds){
   editingSessId=null;
@@ -1553,12 +1583,21 @@ function openAddSessionModal(ds){
   populateSessTeamSelect();
   pickerSel=[];
   renderPicker();
+  modalRevStars=0;
+  modalRevAbsents=[];
+  document.getElementById('m-rev-cancelled').checked=false;
+  document.getElementById('m-rev-attendance').value='';
+  document.getElementById('m-rev-note').value='';
+  renderModalStars();
+  renderModalAbsentChips();
+  onModalCancelledChange();
   openModal('modal-session');
 }
 function openEditSessionModal(id){
   const s=sessions.find(x=>x.id===id);
   if(!s) return;
   editingSessId=id;
+  const rev=reviews[id]||{};
   document.getElementById('modal-session-title').textContent='Modifier la séance';
   document.getElementById('sess-save-btn').textContent='Enregistrer';
   document.getElementById('sess-date').value=s.date;
@@ -1566,6 +1605,14 @@ function openEditSessionModal(id){
   populateSessTeamSelect(s.teamId);
   pickerSel=[...s.exercises];
   renderPicker();
+  modalRevStars=rev.stars||0;
+  modalRevAbsents=rev.absents?[...rev.absents]:[];
+  document.getElementById('m-rev-cancelled').checked=!!rev.cancelled;
+  document.getElementById('m-rev-attendance').value=rev.attendance||'';
+  document.getElementById('m-rev-note').value=rev.note||'';
+  renderModalStars();
+  renderModalAbsentChips();
+  onModalCancelledChange();
   openModal('modal-session');
 }
 function renderPicker(){const list=document.getElementById('ex-picker');if(!exercises.length){list.innerHTML='<div style="padding:11px;color:var(--ink-faint);font-size:.8rem">Ajoute d\'abord des exercices.</div>';return;}list.innerHTML=exercises.map(e=>`<div class="picker-item${pickerSel.includes(e.id)?' sel':''}" onclick="togglePick('${e.id}')"><div class="picker-check">${pickerSel.includes(e.id)?'✓':''}</div><div><div style="font-size:.86rem;font-weight:600">${e.name}</div><div class="picker-item-sub">${e.cat}${e.duration?` · ${e.duration}min`:''}${isRecent(e.id)?' ⚠️':''}</div></div></div>`).join('');const warns=pickerSel.filter(id=>isRecent(id));document.getElementById('repeat-warn').innerHTML=warns.length?`<div class="repeat-warn">⚠️ ${warns.length} exercice(s) récemment utilisé(s)</div>`:'';  }
@@ -1584,7 +1631,15 @@ function saveSession(){
     s={id:uid(),date,title,exercises:exs,teamId};
     sessions.push(s);
   }
-  saveAll();sbSaveSession(s);closeModal('modal-session');
+  const rev={
+    cancelled:document.getElementById('m-rev-cancelled').checked,
+    stars:modalRevStars||null,
+    attendance:parseInt(document.getElementById('m-rev-attendance').value)||null,
+    note:document.getElementById('m-rev-note').value.trim(),
+    absents:[...modalRevAbsents]
+  };
+  reviews[s.id]=rev;
+  saveAll();sbSaveSession(s);sbSaveReview(s.id,rev);closeModal('modal-session');
   editingSessId=null;
   const view=document.querySelector('.nav-btn.active')?.dataset.view;
   if(view==='calendar')renderCalendar();else renderToday();
