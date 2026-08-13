@@ -334,13 +334,14 @@ select option{background:var(--card);}
 <!-- Modal: Séance -->
 <div class="modal-overlay" id="modal-session">
   <div class="modal"><div class="modal-handle"></div>
-    <div class="modal-title">Planifier une séance</div>
+    <div class="modal-title" id="modal-session-title">Planifier une séance</div>
+    <div class="form-group"><label>Équipe</label><select id="sess-team"></select></div>
     <div class="form-group"><label>Date</label><input id="sess-date" type="date"></div>
     <div class="form-group"><label>Titre</label><input id="sess-title" type="text" placeholder="ex: Travail de réception"></div>
     <div class="form-group"><label>Exercices</label><div class="picker-list" id="ex-picker"></div><div id="repeat-warn"></div></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-session')">Annuler</button>
-      <button class="btn btn-primary" onclick="saveSession()">Planifier</button>
+      <button class="btn btn-primary" id="sess-save-btn" onclick="saveSession()">Planifier</button>
     </div>
   </div>
 </div>
@@ -814,7 +815,10 @@ function renderToday(){
       const rev=reviews[s.id]||{};
       const cancelled=rev.cancelled;
       html+=`<div class="today-hero${cancelled?' cancelled':''}">
-        <div class="today-hero-label">${cancelled?'❌ ANNULÉE —':''} Séance du jour</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div class="today-hero-label">${cancelled?'❌ ANNULÉE —':''} Séance du jour</div>
+          <button class="btn btn-sm" style="background:rgba(255,255,255,.18);color:#fff;border-color:transparent;padding:3px 9px;flex-shrink:0" onclick="openEditSessionModal('${s.id}')">✏️ Modifier</button>
+        </div>
         <div class="today-hero-title">${s.title}</div>
         <div class="today-hero-meta">${exs.length} exercice${exs.length!==1?'s':''} · ~${totalMin} min</div>
         ${!cancelled?`<div class="ex-pill-list">${exs.map(e=>`<div class="ex-pill"><span>${e.name}</span><span class="ex-pill-cat">${e.cat}</span></div>`).join('')}</div>`:''}
@@ -1120,7 +1124,10 @@ function showDay(ds){
     html+=`<div class="sess-card${rev.cancelled?' cancelled-card':''}">
       <div class="sess-card-head">
         <div><div class="sess-card-title">${rev.cancelled?'❌ ':''} ${s.title}</div><div class="sess-card-date">${label}</div></div>
-        <button class="btn btn-danger btn-sm" onclick="deleteSess('${s.id}')">🗑</button>
+        <div style="display:flex;gap:5px;flex-shrink:0">
+          <button class="btn btn-ghost btn-sm" onclick="openEditSessionModal('${s.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSess('${s.id}')">🗑</button>
+        </div>
       </div>
       ${!rev.cancelled?exs.map(e=>`<div class="sess-ex-item"><div class="sess-ex-name">${e.name}</div><div class="sess-ex-sub">${e.cat}${e.duration?` · ${e.duration}min`:''}</div></div>`).join(''):''}
       ${revSum}
@@ -1531,10 +1538,57 @@ function saveExercise(){const name=document.getElementById('ex-name').value.trim
 
 // ══ SESSION MODAL ════════════════════════════════════════════
 let pickerSel=[];
-function openAddSessionModal(ds){document.getElementById('sess-date').value=ds||toDateStr(new Date());document.getElementById('sess-title').value='';pickerSel=[];renderPicker();openModal('modal-session');}
+let editingSessId=null;
+function populateSessTeamSelect(selectedId){
+  const sel=document.getElementById('sess-team');
+  sel.innerHTML=teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  sel.value=selectedId||currentTeamId||(teams[0]?.id||'');
+}
+function openAddSessionModal(ds){
+  editingSessId=null;
+  document.getElementById('modal-session-title').textContent='Planifier une séance';
+  document.getElementById('sess-save-btn').textContent='Planifier';
+  document.getElementById('sess-date').value=ds||toDateStr(new Date());
+  document.getElementById('sess-title').value='';
+  populateSessTeamSelect();
+  pickerSel=[];
+  renderPicker();
+  openModal('modal-session');
+}
+function openEditSessionModal(id){
+  const s=sessions.find(x=>x.id===id);
+  if(!s) return;
+  editingSessId=id;
+  document.getElementById('modal-session-title').textContent='Modifier la séance';
+  document.getElementById('sess-save-btn').textContent='Enregistrer';
+  document.getElementById('sess-date').value=s.date;
+  document.getElementById('sess-title').value=s.title;
+  populateSessTeamSelect(s.teamId);
+  pickerSel=[...s.exercises];
+  renderPicker();
+  openModal('modal-session');
+}
 function renderPicker(){const list=document.getElementById('ex-picker');if(!exercises.length){list.innerHTML='<div style="padding:11px;color:var(--ink-faint);font-size:.8rem">Ajoute d\'abord des exercices.</div>';return;}list.innerHTML=exercises.map(e=>`<div class="picker-item${pickerSel.includes(e.id)?' sel':''}" onclick="togglePick('${e.id}')"><div class="picker-check">${pickerSel.includes(e.id)?'✓':''}</div><div><div style="font-size:.86rem;font-weight:600">${e.name}</div><div class="picker-item-sub">${e.cat}${e.duration?` · ${e.duration}min`:''}${isRecent(e.id)?' ⚠️':''}</div></div></div>`).join('');const warns=pickerSel.filter(id=>isRecent(id));document.getElementById('repeat-warn').innerHTML=warns.length?`<div class="repeat-warn">⚠️ ${warns.length} exercice(s) récemment utilisé(s)</div>`:'';  }
 function togglePick(id){pickerSel=pickerSel.includes(id)?pickerSel.filter(x=>x!==id):[...pickerSel,id];renderPicker();}
-function saveSession(){const date=document.getElementById('sess-date').value;if(!date){alert('Choisis une date.');return;}const s={id:uid(),date,title:document.getElementById('sess-title').value.trim()||'Séance',exercises:[...pickerSel],teamId:currentTeamId};sessions.push(s);saveAll();sbSaveSession(s);closeModal('modal-session');const view=document.querySelector('.nav-btn.active')?.dataset.view;if(view==='calendar')renderCalendar();else renderToday();}
+function saveSession(){
+  const date=document.getElementById('sess-date').value;
+  if(!date){alert('Choisis une date.');return;}
+  const teamId=document.getElementById('sess-team').value||currentTeamId;
+  const title=document.getElementById('sess-title').value.trim()||'Séance';
+  const exs=[...pickerSel];
+  let s;
+  if(editingSessId){
+    s=sessions.find(x=>x.id===editingSessId);
+    if(s){ Object.assign(s,{date,title,exercises:exs,teamId}); }
+  } else {
+    s={id:uid(),date,title,exercises:exs,teamId};
+    sessions.push(s);
+  }
+  saveAll();sbSaveSession(s);closeModal('modal-session');
+  editingSessId=null;
+  const view=document.querySelector('.nav-btn.active')?.dataset.view;
+  if(view==='calendar')renderCalendar();else renderToday();
+}
 
 // ══ MATCH MODAL ══════════════════════════════════════════════
 let setsData=[];
