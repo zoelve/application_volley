@@ -806,9 +806,10 @@ const MONTHS=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août'
 function renderToday(){
   const el=document.getElementById('view-today');
   const today=toDateStr(new Date());
-  const ts=teamSessions();
+  const ts=sessions;
+  const multiTeam=teams.length>1;
   const todaySess=ts.filter(s=>s.date===today);
-  const todayMatches=matches.filter(m=>m.date===today&&(!m.teamId||m.teamId===currentTeamId));
+  const todayMatches=matches.filter(m=>m.date===today);
   const upcoming=ts.filter(s=>s.date>today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,3);
   const ct=currentTeam();
   const now2=new Date();
@@ -830,7 +831,7 @@ function renderToday(){
       const cancelled=rev.cancelled;
       html+=`<div class="today-hero${cancelled?' cancelled':''}">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <div class="today-hero-label">${cancelled?'❌ ANNULÉE —':''} Séance du jour</div>
+          <div class="today-hero-label">${cancelled?'❌ ANNULÉE —':''} Séance du jour${multiTeam?' · '+teamName(s.teamId):''}</div>
           <button class="btn btn-sm" style="background:rgba(255,255,255,.18);color:#fff;border-color:transparent;padding:3px 9px;flex-shrink:0" onclick="openEditSessionModal('${s.id}')">✏️ Modifier</button>
         </div>
         <div class="today-hero-title">${s.title}</div>
@@ -853,7 +854,7 @@ function renderToday(){
     html+=`<div class="card match-card ${result.cls}" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div>
-          <div style="font-size:.7rem;font-weight:700;color:var(--ink-faint);text-transform:uppercase;margin-bottom:2px">${m.type==='plateau'?'🏅 Plateau':m.type==='arbitrage'?'🟡 Arbitrage':'🏆 Match'} · <span class="tag ${roleTag(m.role)}">${m.role}</span></div>
+          <div style="font-size:.7rem;font-weight:700;color:var(--ink-faint);text-transform:uppercase;margin-bottom:2px">${m.type==='plateau'?'🏅 Plateau':m.type==='arbitrage'?'🟡 Arbitrage':'🏆 Match'} · <span class="tag ${roleTag(m.role)}">${m.role}</span>${multiTeam&&m.teamId?` · ${teamName(m.teamId)}`:''}</div>
           <div class="match-vs">${m.type==='plateau'?m.plateauName||'Plateau':m.type==='arbitrage'?(m.arbTeamA+' – '+m.arbTeamB):m.opponent}</div>
         </div>
         <div style="text-align:right">
@@ -879,7 +880,7 @@ function renderToday(){
       html+=`<div class="card today-upcoming-card">
         <div>
           <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:.88rem">${s.title}</div>
-          <div style="font-size:.71rem;color:var(--ink-faint);font-family:'JetBrains Mono',monospace;margin-top:2px">${lbl} · ${exs.length} ex.</div>
+          <div style="font-size:.71rem;color:var(--ink-faint);font-family:'JetBrains Mono',monospace;margin-top:2px">${lbl} · ${exs.length} ex.${multiTeam?' · '+teamName(s.teamId):''}</div>
         </div>
         <span style="font-family:'JetBrains Mono',monospace;font-size:.73rem;color:var(--ink-faint)">${lbl}</span>
       </div>`;
