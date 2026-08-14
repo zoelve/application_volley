@@ -14,6 +14,7 @@
   --green:#3a7d5c; --green-bg:#e8f5ee;
   --blue:#2d6fa8; --blue-bg:#e8f0f8;
   --slate:#4a5568; --slate-bg:#eceef1;
+  --toggle-track:#2c5170;
   --shadow:3px 3px 0 var(--border);
   --radius-fold:4px 14px 14px 14px;
 }
@@ -21,13 +22,13 @@
 body{background:var(--bg);color:var(--ink);font-family:'Karla',sans-serif;min-height:100vh;}
 
 /* ── Status bar ── */
-.status-bar{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:400;background:var(--ink);color:#fff;font-family:'JetBrains Mono',monospace;font-size:.68rem;font-weight:500;padding:6px 14px;border-radius:20px;opacity:0;pointer-events:none;transition:opacity .3s,background .2s;box-shadow:0 3px 10px rgba(0,0,0,.18);white-space:nowrap;}
+.status-bar{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:400;background:var(--blue);color:#fff;font-family:'JetBrains Mono',monospace;font-size:.68rem;font-weight:500;padding:6px 14px;border-radius:20px;opacity:0;pointer-events:none;transition:opacity .3s,background .2s;box-shadow:0 3px 10px rgba(0,0,0,.18);white-space:nowrap;}
 .status-bar.show{opacity:1;}
 .status-bar.ok{background:var(--green);}
 .status-bar.warn{background:var(--accent);}
 
 /* ── iOS segmented toggle ── */
-.ios-toggle{position:relative;display:flex;background:var(--slate);border-radius:11px;padding:3px;gap:0;margin-bottom:14px;}
+.ios-toggle{position:relative;display:flex;background:var(--toggle-track);border-radius:11px;padding:3px;gap:0;margin-bottom:14px;}
 .ios-toggle-thumb{position:absolute;top:3px;bottom:3px;left:0;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.25);transition:transform .3s cubic-bezier(.4,0,.2,1),width .3s cubic-bezier(.4,0,.2,1);}
 .ios-toggle-opt{position:relative;z-index:1;flex:1;text-align:center;padding:7px 4px;font-size:.74rem;font-weight:700;cursor:pointer;color:#fff;opacity:.75;border:none;background:none;font-family:'Karla',sans-serif;white-space:nowrap;transition:color .2s,opacity .2s;}
 .ios-toggle-opt.active{color:var(--ink);opacity:1;}
