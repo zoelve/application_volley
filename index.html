@@ -1420,7 +1420,10 @@ function renderStats(){
     const catBars=Object.entries(catCount).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<div class="bar-row"><span class="bar-label">${c}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/maxCat*100)}%"></div></div><span class="bar-count">${n}</span></div>`).join('');
     const topBars=ranked.filter(e=>e.count>0).slice(0,6).map((e,i)=>`<div class="rank-item"><span class="rank-num">#${i+1}</span><span class="rank-name">${e.name}</span><span class="rank-badge">${e.count}×</span></div>`).join('');
     const neverList=ranked.filter(e=>e.count===0).map(e=>`<div class="rank-item"><span class="rank-name">${e.name}</span><span class="tag">${e.cat}</span></div>`).join('');
-    const levelHistory=ts.filter(s=>{const r=reviews[s.id];return r&&r.stars&&!r.cancelled;}).sort((a,b)=>a.date.localeCompare(b.date)).slice(-14).map(s=>({date:s.date,stars:reviews[s.id].stars}));
+    const levelHistoryOf=sessList=>sessList.filter(s=>{const r=reviews[s.id];return r&&r.stars&&!r.cancelled;}).sort((a,b)=>a.date.localeCompare(b.date)).slice(-14).map(s=>({date:s.date,stars:reviews[s.id].stars}));
+    const levelChartsHtml=(!scopeId&&teams.length>1)
+      ?teams.map(t=>`<div class="section-title">Évolution du niveau — ${t.name}</div><div class="card">${renderLevelChart(levelHistoryOf(sessions.filter(s=>s.teamId===t.id)))}</div>`).join('')
+      :`<div class="section-title">Évolution du niveau de groupe</div><div class="card">${renderLevelChart(levelHistoryOf(ts))}</div>`;
     html+=`<div class="stat-grid">
       <div class="stat-card"><div class="stat-num green">${done}</div><div class="stat-label">Séances réalisées</div></div>
       <div class="stat-card"><div class="stat-num">${cancelled}</div><div class="stat-label">Annulations</div></div>
@@ -1431,8 +1434,7 @@ function renderStats(){
       <div class="stat-card"><div class="stat-num">${never}</div><div class="stat-label">Exercices jamais utilisés</div></div>
       <div class="stat-card"><div class="stat-num">${avgRating}</div><div class="stat-label">Niveau moyen équipe</div></div>
     </div>
-    <div class="section-title">Évolution du niveau de groupe</div>
-    <div class="card">${renderLevelChart(levelHistory)}</div>
+    ${levelChartsHtml}
     <div class="section-title">Exercices par catégorie</div>
     <div class="card">${catBars||'<div style="color:var(--ink-faint);font-size:.83rem">Planifiez des séances pour voir les stats.</div>'}</div>
     <div class="section-title">Exercices les + utilisés</div>
