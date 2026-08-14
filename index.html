@@ -1049,14 +1049,7 @@ function renderCalList(mode){
     ];
   }
   items.sort((a,b)=>a.date.localeCompare(b.date));
-  if(!items.length){
-    const emptyAddBtn=mode==='seances'
-      ?`<button class="btn btn-primary btn-sm" onclick="openAddSessionModal('')">+ Séance</button>`
-      :mode==='arb'
-      ?`<button class="btn btn-primary btn-sm" onclick="openMatchModal('','arbitre')">+ Arbitrage</button>`
-      :`<button class="btn btn-ghost btn-sm" onclick="openMatchModal('')">🏆 Match</button> <button class="btn btn-primary btn-sm" onclick="openAddSessionModal('')">+ Séance</button>`;
-    return `<div class="empty"><div class="empty-icon">📭</div>Rien à afficher.<div style="margin-top:14px">${emptyAddBtn}</div></div>`;
-  }
+  if(!items.length) return `<div class="empty"><div class="empty-icon">📭</div>Rien à afficher.</div>`;
   let html='';
   let lastMonthKey='';
   items.forEach(it=>{
