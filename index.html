@@ -972,11 +972,15 @@ function renderCalendar(){
     <button class="ios-toggle-opt${calMode==='seances'?' active':''}" onclick="setCalMode('seances')">Séances</button>
     <button class="ios-toggle-opt${calMode==='arb'?' active':''}" onclick="setCalMode('arb')">🟡 Arb.</button>
   </div>`;
+  const addButtons=calMode==='seances'
+    ?`<button class="btn btn-primary btn-sm" onclick="openAddSessionModal('')">+ Séance</button>`
+    :calMode==='arb'
+    ?`<button class="btn btn-primary btn-sm" onclick="openMatchModal('','arbitre')">+ Arbitrage</button>`
+    :`<button class="btn btn-ghost btn-sm" onclick="openMatchModal('')">🏆 Match</button><button class="btn btn-primary btn-sm" onclick="openAddSessionModal('')">+ Séance</button>`;
   const head=`<div class="page-head"><div class="page-title">Planning</div>
     <div style="display:flex;gap:6px">
       <button class="btn btn-ghost btn-sm" onclick="syncFfvb()">🔄</button>
-      <button class="btn btn-ghost btn-sm" onclick="openMatchModal('')">🏆 Match</button>
-      <button class="btn btn-primary btn-sm" onclick="openAddSessionModal('')">+ Séance</button>
+      ${addButtons}
     </div>
   </div>`;
 
@@ -1041,7 +1045,14 @@ function renderCalList(mode){
     ];
   }
   items.sort((a,b)=>a.date.localeCompare(b.date));
-  if(!items.length) return `<div class="empty"><div class="empty-icon">📭</div>Rien à afficher.</div>`;
+  if(!items.length){
+    const emptyAddBtn=mode==='seances'
+      ?`<button class="btn btn-primary btn-sm" onclick="openAddSessionModal('')">+ Séance</button>`
+      :mode==='arb'
+      ?`<button class="btn btn-primary btn-sm" onclick="openMatchModal('','arbitre')">+ Arbitrage</button>`
+      :`<button class="btn btn-ghost btn-sm" onclick="openMatchModal('')">🏆 Match</button> <button class="btn btn-primary btn-sm" onclick="openAddSessionModal('')">+ Séance</button>`;
+    return `<div class="empty"><div class="empty-icon">📭</div>Rien à afficher.<div style="margin-top:14px">${emptyAddBtn}</div></div>`;
+  }
   let html='';
   let lastMonthKey='';
   items.forEach(it=>{
@@ -1666,11 +1677,11 @@ function setMatchRole(v){
   positionToggle(document.getElementById('role-toggle'));
   toggleMatchFields();
 }
-function openMatchModal(ds){
+function openMatchModal(ds,presetRole){
   document.getElementById('m-date').value=ds||toDateStr(new Date());
   document.getElementById('m-type').value='match';
-  matchRoleVal='coach';
-  document.querySelectorAll('#role-toggle .ios-toggle-opt').forEach(b=>b.classList.toggle('active',b.dataset.v==='coach'));
+  matchRoleVal=presetRole||'coach';
+  document.querySelectorAll('#role-toggle .ios-toggle-opt').forEach(b=>b.classList.toggle('active',b.dataset.v===matchRoleVal));
   ['m-opponent','m-plateau-name','m-arb-team-a','m-arb-team-b','m-arb-lieu','m-arb-heure'].forEach(id=>document.getElementById(id).value='');
   ['m-arb-score-a','m-arb-score-b'].forEach(id=>document.getElementById(id).value='');
   ['m-good','m-bad','m-comment'].forEach(id=>document.getElementById(id).value='');
