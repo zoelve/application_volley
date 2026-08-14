@@ -340,7 +340,11 @@ select option{background:var(--card);}
     <div class="form-group"><label>Équipe</label><select id="sess-team" onchange="onSessTeamChange()"></select></div>
     <div class="form-group"><label>Date</label><input id="sess-date" type="date"></div>
     <div class="form-group"><label>Titre</label><input id="sess-title" type="text" placeholder="ex: Travail de réception"></div>
-    <div class="form-group"><label>Exercices</label><div class="picker-list" id="ex-picker"></div><div id="repeat-warn"></div></div>
+    <div class="form-group"><label>Exercices</label>
+      <input type="text" id="ex-picker-search" placeholder="🔍 Rechercher un exercice…" oninput="renderPicker()" style="margin-bottom:8px">
+      <div class="filters" id="ex-picker-filters" style="margin-bottom:8px"></div>
+      <div class="picker-list" id="ex-picker"></div><div id="repeat-warn"></div>
+    </div>
 
     <div class="section-title" style="margin-top:6px">📋 Bilan de séance</div>
     <label class="cancel-toggle"><input type="checkbox" id="m-rev-cancelled" onchange="onModalCancelledChange()"> Séance annulée</label>
@@ -1347,6 +1351,7 @@ function deleteMatch(id){if(!confirm('Supprimer ?'))return;matches=matches.filte
 // ══ STATS ═══════════════════════════════════════════════════
 let statsTab='entrainement';
 let statsRoleTab='tout'; // tout | coach | joueur — used within onglet Matchs
+let statsTeamId; // undefined => defaults to currentTeamId on first render; null => toutes les équipes
 function setStatsTab(t){statsTab=t;renderStats();}
 function setStatsRoleTab(t){statsRoleTab=t;renderStats();}
 
@@ -1383,14 +1388,23 @@ function renderLevelChart(points){
   return `${buildLevelChartSVG(points)}<details class="chart-details"><summary>Voir le détail (${points.length} séances)</summary>${rows}</details>`;
 }
 
+function setStatsTeam(id){statsTeamId=id;renderStats();}
 function renderStats(){
   const el=document.getElementById('view-stats');
-  const ts=teamSessions();
-  const tm=matches.filter(m=>!m.teamId||m.teamId===currentTeamId);
-  const ct=currentTeam();
+  if(statsTeamId===undefined) statsTeamId=currentTeamId;
+  const scopeId=statsTeamId;
+  const ts=scopeId?sessions.filter(s=>s.teamId===scopeId):sessions;
+  const tm=matches.filter(m=>!scopeId||!m.teamId||m.teamId===scopeId);
+  const scopeTeam=teams.find(t=>t.id===scopeId);
+  const scopeLabel=scopeTeam?scopeTeam.name:'Toutes les équipes';
   const tabs=['entrainement','matchs'].map(t=>`<button class="filter-btn${statsTab===t?' active':''}" onclick="setStatsTab('${t}')">${t==='entrainement'?'🏐 Entraînement':'🏆 Matchs'}</button>`).join('');
+  const teamPicker=teams.length>1?`<div class="filters">
+    <button class="filter-btn${!scopeId?' active':''}" onclick="setStatsTeam(null)">Toutes les équipes</button>
+    ${teams.map(t=>`<button class="filter-btn${scopeId===t.id?' active':''}" onclick="setStatsTeam('${t.id}')">${t.name}</button>`).join('')}
+  </div>`:'';
 
-  let html=`<div class="page-head"><div class="page-title">Stats${ct?' — '+ct.name:''}</div></div>
+  let html=`<div class="page-head"><div class="page-title">Stats — ${scopeLabel}</div></div>
+  ${teamPicker}
   <div class="filters">${tabs}</div>`;
 
   if(statsTab==='entrainement'){
@@ -1604,6 +1618,8 @@ function openAddSessionModal(ds){
   document.getElementById('sess-title').value='';
   populateSessTeamSelect();
   pickerSel=[];
+  pickerCatFilter='Tous';
+  document.getElementById('ex-picker-search').value='';
   renderPicker();
   modalRevStars=0;
   modalRevAbsents=[];
@@ -1626,6 +1642,8 @@ function openEditSessionModal(id){
   document.getElementById('sess-title').value=s.title;
   populateSessTeamSelect(s.teamId);
   pickerSel=[...s.exercises];
+  pickerCatFilter='Tous';
+  document.getElementById('ex-picker-search').value='';
   renderPicker();
   modalRevStars=rev.stars||0;
   modalRevAbsents=rev.absents?[...rev.absents]:[];
@@ -1637,7 +1655,20 @@ function openEditSessionModal(id){
   onModalCancelledChange();
   openModal('modal-session');
 }
-function renderPicker(){const list=document.getElementById('ex-picker');if(!exercises.length){list.innerHTML='<div style="padding:11px;color:var(--ink-faint);font-size:.8rem">Ajoute d\'abord des exercices.</div>';return;}list.innerHTML=exercises.map(e=>`<div class="picker-item${pickerSel.includes(e.id)?' sel':''}" onclick="togglePick('${e.id}')"><div class="picker-check">${pickerSel.includes(e.id)?'✓':''}</div><div><div style="font-size:.86rem;font-weight:600">${e.name}</div><div class="picker-item-sub">${e.cat}${e.duration?` · ${e.duration}min`:''}${isRecent(e.id)?' ⚠️':''}</div></div></div>`).join('');const warns=pickerSel.filter(id=>isRecent(id));document.getElementById('repeat-warn').innerHTML=warns.length?`<div class="repeat-warn">⚠️ ${warns.length} exercice(s) récemment utilisé(s)</div>`:'';  }
+let pickerCatFilter='Tous';
+function setPickerCat(c){pickerCatFilter=c;renderPicker();}
+function renderPicker(){
+  const list=document.getElementById('ex-picker');
+  const filtersEl=document.getElementById('ex-picker-filters');
+  const cats=['Tous','Service','Réception','Attaque','Défense','Passe','Collectif','⭐'];
+  if(filtersEl) filtersEl.innerHTML=cats.map(c=>`<button type="button" class="filter-btn${pickerCatFilter===c?' active':''}" onclick="setPickerCat('${c}')">${c}</button>`).join('');
+  if(!exercises.length){list.innerHTML='<div style="padding:11px;color:var(--ink-faint);font-size:.8rem">Ajoute d\'abord des exercices.</div>';return;}
+  const search=(document.getElementById('ex-picker-search')?.value||'').toLowerCase().trim();
+  let filtered=pickerCatFilter==='⭐'?exercises.filter(e=>e.fav):pickerCatFilter==='Tous'?exercises:exercises.filter(e=>e.cat===pickerCatFilter);
+  if(search) filtered=filtered.filter(e=>e.name.toLowerCase().includes(search));
+  list.innerHTML=filtered.length?filtered.map(e=>`<div class="picker-item${pickerSel.includes(e.id)?' sel':''}" onclick="togglePick('${e.id}')"><div class="picker-check">${pickerSel.includes(e.id)?'✓':''}</div><div><div style="font-size:.86rem;font-weight:600">${e.name}</div><div class="picker-item-sub">${e.cat}${e.duration?` · ${e.duration}min`:''}${isRecent(e.id)?' ⚠️':''}</div></div></div>`).join(''):'<div style="padding:11px;color:var(--ink-faint);font-size:.8rem">Aucun exercice ne correspond.</div>';
+  const warns=pickerSel.filter(id=>isRecent(id));document.getElementById('repeat-warn').innerHTML=warns.length?`<div class="repeat-warn">⚠️ ${warns.length} exercice(s) récemment utilisé(s)</div>`:'';
+}
 function togglePick(id){pickerSel=pickerSel.includes(id)?pickerSel.filter(x=>x!==id):[...pickerSel,id];renderPicker();}
 function saveSession(){
   const date=document.getElementById('sess-date').value;
