@@ -444,10 +444,18 @@ select option{background:var(--card);}
   <div class="modal"><div class="modal-handle"></div>
     <div class="modal-title">Nouvelle équipe</div>
     <div class="form-group"><label>Nom</label><input id="team-name" type="text" placeholder="ex: Seniors A, U18…"></div>
+    <div class="form-group"><label>Genre (optionnel)</label>
+      <select id="team-gender">
+        <option value="">Non précisé</option>
+        <option value="F">Féminine</option>
+        <option value="M">Masculine</option>
+        <option value="mixte">Mixte</option>
+      </select>
+    </div>
     <div class="form-group"><label>Niveau (optionnel)</label><input id="team-level" type="text" placeholder="ex: Régionale, Départementale…"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-team')">Annuler</button>
-      <button class="btn btn-primary" onclick="saveTeam()">Créer</button>
+      <button class="btn btn-primary" id="team-save-btn" onclick="saveTeam()">Créer</button>
     </div>
   </div>
 </div>
@@ -534,6 +542,8 @@ function currentTeam(){return teams.find(t=>t.id===currentTeamId)||null;}
 function teamPlayers(){return currentTeamId?players.filter(p=>p.teamId===currentTeamId):players;}
 function teamName(id){const t=teams.find(x=>x.id===id);return t?t.name:'';}
 function teamShort(id){const n=teamName(id);return n?n.slice(0,2).toUpperCase():'';}
+function genderIcon(g){return g==='F'?'♀ ':g==='M'?'♂ ':g==='mixte'?'⚥ ':'';}
+function genderLabel(g){return g==='F'?'Féminine':g==='M'?'Masculine':g==='mixte'?'Mixte':'';}
 function teamSessions(){return currentTeamId?sessions.filter(s=>s.teamId===currentTeamId):sessions;}
 
 // ══════════════════════════════════════════════════════════════
@@ -558,7 +568,7 @@ async function loadFromSupabase(){
       return;
     }
 
-    teams = tRows.map(t=>({id:t.id,name:t.name,level:t.level||''}));
+    teams = tRows.map(t=>({id:t.id,name:t.name,level:t.level||'',gender:t.gender||''}));
     players = pRows.map(p=>({id:p.id,teamId:p.team_id,name:p.name,num:p.number||''}));
     exercises = eRows.map(e=>({id:e.id,name:e.name,cat:e.category,duration:e.duration_min,tiktok:e.tiktok_url||'',notes:e.notes||'',fav:!!e.favourite}));
     sessions = sRows.map(s=>({
@@ -604,7 +614,12 @@ async function pushSeedToSupabase(){
 }
 
 // ── Fire-and-forget writers ──
-function sbSaveTeam(t){ SB.upsert('teams',[{id:t.id,name:t.name,level:t.level||null}]).catch(()=>{}); }
+function sbSaveTeam(t){
+  SB.upsert('teams',[{id:t.id,name:t.name,level:t.level||null,gender:t.gender||null}]).catch(()=>{
+    // la colonne "gender" n'existe peut-être pas encore côté Supabase : on retente sans elle
+    SB.upsert('teams',[{id:t.id,name:t.name,level:t.level||null}]).catch(()=>{});
+  });
+}
 function sbDeleteTeam(id){ SB.delete('teams',`id=eq.${id}`).catch(()=>{}); }
 function sbSavePlayer(p){ SB.upsert('players',[{id:p.id,team_id:p.teamId,name:p.name,number:p.num||null}]).catch(()=>{}); }
 function sbDeletePlayer(id){ SB.delete('players',`id=eq.${id}`).catch(()=>{}); }
@@ -821,7 +836,7 @@ function renderToday(){
 
   let html=`<div class="page-head">
     <div class="app-logo">Set<span>Up</span> 🏐</div>
-    ${ct?`<span class="team-badge">${ct.name}</span>`:''}
+    ${ct?`<span class="team-badge">${genderIcon(ct.gender)}${ct.name}</span>`:''}
   </div>
   <div class="today-date">${dateLabel}</div>
   <div class="today-split">
@@ -1550,24 +1565,62 @@ function renderPlayers(){
       <div style="font-size:2rem;margin-bottom:7px">👥</div>
       <div style="font-weight:700;margin-bottom:5px">Pas encore d'équipe</div>
       <div style="font-size:.8rem;color:var(--ink-mid);margin-bottom:12px">Crée une équipe pour gérer tes joueurs.</div>
-      <button class="btn btn-primary" onclick="openModal('modal-team')">+ Créer une équipe</button>
+      <button class="btn btn-primary" onclick="openAddTeamModal()">+ Créer une équipe</button>
     </div>`;
     return;
   }
-  const teamTabs=teams.map(t=>`<button class="filter-btn${t.id===currentTeamId?' active':''}" onclick="selectTeam('${t.id}')">${t.name}</button>`).join('');
+  const teamTabs=teams.map(t=>`<button class="filter-btn${t.id===currentTeamId?' active':''}" onclick="selectTeam('${t.id}')">${genderIcon(t.gender)}${t.name}</button>`).join('');
   const tp=teamPlayers();
   const rows=tp.map(p=>`<div class="player-row">
     <div><span class="player-name-display">${p.name}</span><span class="player-num">${p.num?'#'+p.num:''}</span></div>
     <button class="btn btn-danger btn-sm" onclick="deletePlayer('${p.id}')">🗑</button>
   </div>`).join('');
-  el.innerHTML=`<div class="page-head"><div class="page-title">${ct?ct.name:'Équipes'}</div><button class="btn btn-primary btn-sm" onclick="openModal('modal-player')">+ Joueur</button></div>
-  <div class="filters">${teamTabs}<button class="filter-btn" onclick="openModal('modal-team')">＋ Équipe</button></div>
+  el.innerHTML=`<div class="page-head"><div class="page-title">${ct?genderIcon(ct.gender)+ct.name:'Équipes'}${ct&&ct.gender?`<span class="tag" style="margin-left:6px">${genderLabel(ct.gender)}</span>`:''}</div>
+  <div style="display:flex;gap:6px">${ct?`<button class="btn btn-ghost btn-sm" onclick="openEditTeamModal('${ct.id}')">✏️</button>`:''}<button class="btn btn-primary btn-sm" onclick="openModal('modal-player')">+ Joueur</button></div>
+  </div>
+  <div class="filters">${teamTabs}<button class="filter-btn" onclick="openAddTeamModal()">＋ Équipe</button></div>
   <div class="card">${rows||'<div class="empty"><div class="empty-icon">👤</div>Aucun joueur.<br>Ajoute-en un !</div>'}</div>
   ${ct?`<button style="margin-top:6px;font-size:.73rem;color:var(--ink-faint);background:none;border:none;cursor:pointer;font-family:Karla,sans-serif;text-decoration:underline" onclick="deleteTeam('${ct.id}')">🗑 Supprimer l'équipe ${ct.name}</button>`:''}`;
 }
 function selectTeam(id){currentTeamId=id;saveAll();renderPlayers();}
 function deleteTeam(id){if(!confirm('Supprimer cette équipe ?'))return;teams=teams.filter(t=>t.id!==id);players=players.filter(p=>p.teamId!==id);if(currentTeamId===id)currentTeamId=teams[0]?.id||null;saveAll();sbDeleteTeam(id);renderPlayers();}
-function saveTeam(){const name=document.getElementById('team-name').value.trim();if(!name)return;const t={id:uid(),name,level:document.getElementById('team-level').value.trim()};teams.push(t);currentTeamId=t.id;saveAll();sbSaveTeam(t);closeModal('modal-team');renderPlayers();}
+let editingTeamId=null;
+function openAddTeamModal(){
+  editingTeamId=null;
+  document.querySelector('#modal-team .modal-title').textContent='Nouvelle équipe';
+  document.getElementById('team-save-btn').textContent='Créer';
+  document.getElementById('team-name').value='';
+  document.getElementById('team-gender').value='';
+  document.getElementById('team-level').value='';
+  openModal('modal-team');
+}
+function openEditTeamModal(id){
+  const t=teams.find(x=>x.id===id);
+  if(!t) return;
+  editingTeamId=id;
+  document.querySelector('#modal-team .modal-title').textContent='Modifier l\'équipe';
+  document.getElementById('team-save-btn').textContent='Enregistrer';
+  document.getElementById('team-name').value=t.name;
+  document.getElementById('team-gender').value=t.gender||'';
+  document.getElementById('team-level').value=t.level||'';
+  openModal('modal-team');
+}
+function saveTeam(){
+  const name=document.getElementById('team-name').value.trim();
+  if(!name)return;
+  const gender=document.getElementById('team-gender').value;
+  const level=document.getElementById('team-level').value.trim();
+  let t;
+  if(editingTeamId){
+    t=teams.find(x=>x.id===editingTeamId);
+    if(t) Object.assign(t,{name,gender,level});
+  } else {
+    t={id:uid(),name,gender,level};
+    teams.push(t);
+    currentTeamId=t.id;
+  }
+  saveAll();sbSaveTeam(t);closeModal('modal-team');editingTeamId=null;renderPlayers();
+}
 function deletePlayer(id){if(!confirm('Supprimer ?'))return;players=players.filter(p=>p.id!==id);saveAll();sbDeletePlayer(id);renderPlayers();}
 function savePlayer(){const name=document.getElementById('player-name').value.trim();if(!name)return;const p={id:uid(),name,num:document.getElementById('player-num').value.trim(),teamId:currentTeamId};players.push(p);saveAll();sbSavePlayer(p);closeModal('modal-player');renderPlayers();}
 
