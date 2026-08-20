@@ -1368,7 +1368,7 @@ function deleteMatch(id){if(!confirm('Supprimer ?'))return;matches=matches.filte
 // ══ STATS ═══════════════════════════════════════════════════
 let statsTab='entrainement';
 let statsRoleTab='tout'; // tout | coach | joueur — used within onglet Matchs
-let statsTeamId; // undefined => defaults to currentTeamId on first render; null => toutes les équipes
+let statsShowAllTeams=false; // true => "Toutes les équipes" ; sinon Stats suit currentTeamId
 function setStatsTab(t){statsTab=t;renderStats();}
 function setStatsRoleTab(t){statsRoleTab=t;renderStats();}
 
@@ -1405,11 +1405,14 @@ function renderLevelChart(points){
   return `${buildLevelChartSVG(points)}<details class="chart-details"><summary>Voir le détail (${points.length} séances)</summary>${rows}</details>`;
 }
 
-function setStatsTeam(id){statsTeamId=id;renderStats();}
+function setStatsTeam(id){
+  if(id){ statsShowAllTeams=false; currentTeamId=id; saveAll(); }
+  else { statsShowAllTeams=true; }
+  renderStats();
+}
 function renderStats(){
   const el=document.getElementById('view-stats');
-  if(statsTeamId===undefined) statsTeamId=currentTeamId;
-  const scopeId=statsTeamId;
+  const scopeId=statsShowAllTeams?null:currentTeamId;
   const ts=scopeId?sessions.filter(s=>s.teamId===scopeId):sessions;
   const tm=matches.filter(m=>!scopeId||!m.teamId||m.teamId===scopeId);
   const scopeTeam=teams.find(t=>t.id===scopeId);
