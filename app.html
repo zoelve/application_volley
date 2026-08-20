@@ -544,6 +544,15 @@ function teamName(id){const t=teams.find(x=>x.id===id);return t?t.name:'';}
 function teamShort(id){const n=teamName(id);return n?n.slice(0,2).toUpperCase():'';}
 function genderIcon(g){return g==='F'?'♀ ':g==='M'?'♂ ':g==='mixte'?'⚥ ':'';}
 function genderLabel(g){return g==='F'?'Féminine':g==='M'?'Masculine':g==='mixte'?'Mixte':'';}
+let teamGenderFilter='tous'; // tous | F | M | mixte
+function setTeamGenderFilter(g){teamGenderFilter=g;renderStats();renderPlayers();}
+function sortedTeams(){return [...teams].sort((a,b)=>(a.gender||'zzz').localeCompare(b.gender||'zzz')||a.name.localeCompare(b.name));}
+function visibleTeams(){const s=sortedTeams();return teamGenderFilter==='tous'?s:s.filter(t=>t.gender===teamGenderFilter);}
+function teamGenderFilterHtml(){
+  if(teams.length<2 || !teams.some(t=>t.gender)) return '';
+  const opts=[['tous','Tous'],['F','♀ Féminines'],['M','♂ Masculins'],['mixte','⚥ Mixtes']];
+  return `<div class="filters">${opts.map(([v,l])=>`<button class="filter-btn${teamGenderFilter===v?' active':''}" onclick="setTeamGenderFilter('${v}')">${l}</button>`).join('')}</div>`;
+}
 function teamSessions(){return currentTeamId?sessions.filter(s=>s.teamId===currentTeamId):sessions;}
 
 // ══════════════════════════════════════════════════════════════
@@ -1408,10 +1417,11 @@ function renderStats(){
   const tabs=['entrainement','matchs'].map(t=>`<button class="filter-btn${statsTab===t?' active':''}" onclick="setStatsTab('${t}')">${t==='entrainement'?'🏐 Entraînement':'🏆 Matchs'}</button>`).join('');
   const teamPicker=teams.length>1?`<div class="filters">
     <button class="filter-btn${!scopeId?' active':''}" onclick="setStatsTeam(null)">Toutes les équipes</button>
-    ${teams.map(t=>`<button class="filter-btn${scopeId===t.id?' active':''}" onclick="setStatsTeam('${t.id}')">${t.name}</button>`).join('')}
+    ${visibleTeams().map(t=>`<button class="filter-btn${scopeId===t.id?' active':''}" onclick="setStatsTeam('${t.id}')">${genderIcon(t.gender)}${t.name}</button>`).join('')}
   </div>`:'';
 
   let html=`<div class="page-head"><div class="page-title">Stats — ${scopeLabel}</div></div>
+  ${teamGenderFilterHtml()}
   ${teamPicker}
   <div class="filters">${tabs}</div>`;
 
@@ -1569,7 +1579,7 @@ function renderPlayers(){
     </div>`;
     return;
   }
-  const teamTabs=teams.map(t=>`<button class="filter-btn${t.id===currentTeamId?' active':''}" onclick="selectTeam('${t.id}')">${genderIcon(t.gender)}${t.name}</button>`).join('');
+  const teamTabs=visibleTeams().map(t=>`<button class="filter-btn${t.id===currentTeamId?' active':''}" onclick="selectTeam('${t.id}')">${genderIcon(t.gender)}${t.name}</button>`).join('');
   const tp=teamPlayers();
   const rows=tp.map(p=>`<div class="player-row">
     <div><span class="player-name-display">${p.name}</span><span class="player-num">${p.num?'#'+p.num:''}</span></div>
@@ -1578,7 +1588,8 @@ function renderPlayers(){
   el.innerHTML=`<div class="page-head"><div class="page-title">${ct?genderIcon(ct.gender)+ct.name:'Équipes'}${ct&&ct.gender?`<span class="tag" style="margin-left:6px">${genderLabel(ct.gender)}</span>`:''}</div>
   <div style="display:flex;gap:6px">${ct?`<button class="btn btn-ghost btn-sm" onclick="openEditTeamModal('${ct.id}')">✏️</button>`:''}<button class="btn btn-primary btn-sm" onclick="openModal('modal-player')">+ Joueur</button></div>
   </div>
-  <div class="filters">${teamTabs}<button class="filter-btn" onclick="openAddTeamModal()">＋ Équipe</button></div>
+  ${teamGenderFilterHtml()}
+  <div class="filters">${teamTabs || '<div style="color:var(--ink-faint);font-size:.8rem;padding:6px 0">Aucune équipe pour ce filtre.</div>'}<button class="filter-btn" onclick="openAddTeamModal()">＋ Équipe</button></div>
   <div class="card">${rows||'<div class="empty"><div class="empty-icon">👤</div>Aucun joueur.<br>Ajoute-en un !</div>'}</div>
   ${ct?`<button style="margin-top:6px;font-size:.73rem;color:var(--ink-faint);background:none;border:none;cursor:pointer;font-family:Karla,sans-serif;text-decoration:underline" onclick="deleteTeam('${ct.id}')">🗑 Supprimer l'équipe ${ct.name}</button>`:''}`;
 }
@@ -1637,7 +1648,15 @@ let modalRevStars=0;
 let modalRevAbsents=[];
 function populateSessTeamSelect(selectedId){
   const sel=document.getElementById('sess-team');
-  sel.innerHTML=teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  if(teams.some(t=>t.gender)){
+    const groups=[['F','♀ Féminines'],['M','♂ Masculins'],['mixte','⚥ Mixtes'],['','Sans genre précisé']];
+    sel.innerHTML=groups.map(([g,label])=>{
+      const list=sortedTeams().filter(t=>(t.gender||'')===g);
+      return list.length?`<optgroup label="${label}">${list.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}</optgroup>`:'';
+    }).join('');
+  } else {
+    sel.innerHTML=teams.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  }
   sel.value=selectedId||currentTeamId||(teams[0]?.id||'');
 }
 function onSessTeamChange(){ renderModalAbsentChips(); }
