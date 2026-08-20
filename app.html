@@ -460,6 +460,18 @@ select option{background:var(--card);}
   </div>
 </div>
 
+<!-- Modal: Profil -->
+<div class="modal-overlay" id="modal-profile">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">Qui es-tu ?</div>
+    <div style="font-size:.83rem;color:var(--ink-mid);margin-bottom:14px">Ton prénom sera associé aux séances et matchs que tu ajoutes, pour pouvoir filtrer "les miens" plus tard.</div>
+    <div class="form-group"><label>Prénom</label><input id="profile-name" type="text" placeholder="ex: Zoé"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary btn-block" onclick="saveProfile()">Valider</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════════
 // ══ SUPABASE + CACHE LAYER ══════════════════════════════════════
@@ -532,6 +544,7 @@ let teams        = LC.get('teams')        || [];
 let matches      = LC.get('matches')      || [];
 let ffvbMatches  = LC.get('ffvbMatches')  || [];
 let currentTeamId = LC.get('currentTeam') || null;
+let myProfile = LC.get('myProfile') || '';
 
 function saveAll(){
   LC.set('exercises',exercises);LC.set('sessions',sessions);LC.set('players',players);
@@ -581,7 +594,7 @@ async function loadFromSupabase(){
     players = pRows.map(p=>({id:p.id,teamId:p.team_id,name:p.name,num:p.number||''}));
     exercises = eRows.map(e=>({id:e.id,name:e.name,cat:e.category,duration:e.duration_min,tiktok:e.tiktok_url||'',notes:e.notes||'',fav:!!e.favourite}));
     sessions = sRows.map(s=>({
-      id:s.id, teamId:s.team_id, date:s.date, title:s.title,
+      id:s.id, teamId:s.team_id, date:s.date, title:s.title, createdBy:s.created_by||'',
       exercises: seRows.filter(se=>se.session_id===s.id).sort((a,b)=>(a.position||0)-(b.position||0)).map(se=>se.exercise_id)
     }));
     reviews = {};
@@ -595,7 +608,7 @@ async function loadFromSupabase(){
       id:m.id, teamId:m.team_id, date:m.date, type:m.type, role:m.role, opponent:m.opponent||'',
       isHome:m.is_home, plateauName:m.plateau_name||'', arbTeamA:m.arb_team_a||'', arbTeamB:m.arb_team_b||'',
       arbScoreA:m.arb_score_a, arbScoreB:m.arb_score_b, arbLieu:m.arb_lieu||'', arbHeure:m.time||'',
-      good:m.good_points||'', bad:m.to_improve||'', comment:m.comment||'',
+      good:m.good_points||'', bad:m.to_improve||'', comment:m.comment||'', createdBy:m.created_by||'',
       sets: ssRows.filter(s=>s.match_id===m.id).sort((a,b)=>a.set_number-b.set_number).map(s=>({us:s.score_us,them:s.score_them})),
       plateauMatches: pmRows.filter(p=>p.match_id===m.id).sort((a,b)=>(a.position||0)-(b.position||0)).map(p=>({opponent:p.opponent,us:p.score_us,them:p.score_them}))
     }));
@@ -636,7 +649,9 @@ function sbSaveExercise(e){ SB.upsert('exercises',[{id:e.id,name:e.name,category
 function sbDeleteExercise(id){ SB.delete('exercises',`id=eq.${id}`).catch(()=>{}); }
 
 function sbSaveSession(s){
-  SB.upsert('sessions',[{id:s.id,team_id:s.teamId,date:s.date,title:s.title}]).catch(()=>{});
+  SB.upsert('sessions',[{id:s.id,team_id:s.teamId,date:s.date,title:s.title,created_by:s.createdBy||null}]).catch(()=>{
+    SB.upsert('sessions',[{id:s.id,team_id:s.teamId,date:s.date,title:s.title}]).catch(()=>{});
+  });
   SB.delete('session_exercises',`session_id=eq.${s.id}`).then(()=>{
     if(s.exercises.length) SB.post('session_exercises', s.exercises.map((eid,i)=>({session_id:s.id,exercise_id:eid,position:i})));
   }).catch(()=>{});
@@ -655,9 +670,12 @@ function sbSaveMatch(m){
     id:m.id, team_id:m.teamId, date:m.date, time:m.arbHeure||null, type:m.type, role:m.role,
     opponent:m.opponent||null, is_home:(typeof m.isHome==='boolean')?m.isHome:null, plateau_name:m.plateauName||null,
     arb_team_a:m.arbTeamA||null, arb_team_b:m.arbTeamB||null, arb_score_a:(m.arbScoreA??null), arb_score_b:(m.arbScoreB??null),
-    arb_lieu:m.arbLieu||null, good_points:m.good||null, to_improve:m.bad||null, comment:m.comment||null
+    arb_lieu:m.arbLieu||null, good_points:m.good||null, to_improve:m.bad||null, comment:m.comment||null, created_by:m.createdBy||null
   };
-  SB.upsert('matches',[row]).catch(()=>{});
+  SB.upsert('matches',[row]).catch(()=>{
+    const {created_by, ...rowNoCreatedBy}=row;
+    SB.upsert('matches',[rowNoCreatedBy]).catch(()=>{});
+  });
   if(m.sets){
     SB.delete('set_scores',`match_id=eq.${m.id}`).then(()=>{
       if(m.sets.length) SB.post('set_scores', m.sets.map((s,i)=>({match_id:m.id,set_number:i+1,score_us:s.us,score_them:s.them})));
@@ -1194,12 +1212,20 @@ function deleteSess(id){if(!confirm('Supprimer ?'))return;sessions=sessions.filt
 // ══ MATCHES ═════════════════════════════════════════════════
 let matchFilter='tout'; // tout | coach | joueur
 let activeKpi=null; // 'wins'|'losses'|'plateaux'|'arbitrages'|null
+let matchAuthorFilter='tous';
+function setMatchAuthorFilter(a){matchAuthorFilter=a;activeKpi=null;renderMatches();}
 
 function setMatchFilter(f){matchFilter=f;activeKpi=null;renderMatches();}
 
 function renderMatches(){
   const el=document.getElementById('view-matches');
-  const tm=matches.filter(m=>!m.teamId||m.teamId===currentTeamId).sort((a,b)=>b.date.localeCompare(a.date));
+  const tmAll=matches.filter(m=>!m.teamId||m.teamId===currentTeamId).sort((a,b)=>b.date.localeCompare(a.date));
+  const authors=[...new Set(tmAll.map(m=>m.createdBy).filter(Boolean))];
+  const tm=matchAuthorFilter==='tous'?tmAll:tmAll.filter(m=>m.createdBy===matchAuthorFilter);
+  const authorFilterHtml=authors.length>1?`<div class="filters">
+    <button class="filter-btn${matchAuthorFilter==='tous'?' active':''}" onclick="setMatchAuthorFilter('tous')">Tout le monde</button>
+    ${authors.map(a=>`<button class="filter-btn${matchAuthorFilter===a?' active':''}" onclick="setMatchAuthorFilter('${a}')">${a===myProfile?'👤 Moi':a}</button>`).join('')}
+  </div>`:'';
   const toggleHtml=`<div class="ios-toggle" id="matches-toggle">
     <div class="ios-toggle-thumb"></div>
     <button class="ios-toggle-opt${matchFilter==='tout'?' active':''}" onclick="setMatchFilter('tout')">Tout</button>
@@ -1251,6 +1277,7 @@ function renderMatches(){
 
   const cards=list.length?`<div class="match-grid">${list.map(renderMatchCard).join('')}</div>`:`<div class="empty"><div class="empty-icon">🏆</div>Aucun match enregistré.<br>Ajoutes-en un !</div>`;
   el.innerHTML=`<div class="page-head"><div class="page-title">Matchs</div><button class="btn btn-primary btn-sm" onclick="openMatchModal('')">+ Ajouter</button></div>
+  ${authorFilterHtml}
   ${summary}${toggleHtml}${cards}`;
   mountToggles(el);
 }
@@ -1594,7 +1621,8 @@ function renderPlayers(){
   ${teamGenderFilterHtml()}
   <div class="filters">${teamTabs || '<div style="color:var(--ink-faint);font-size:.8rem;padding:6px 0">Aucune équipe pour ce filtre.</div>'}<button class="filter-btn" onclick="openAddTeamModal()">＋ Équipe</button></div>
   <div class="card">${rows||'<div class="empty"><div class="empty-icon">👤</div>Aucun joueur.<br>Ajoute-en un !</div>'}</div>
-  ${ct?`<button style="margin-top:6px;font-size:.73rem;color:var(--ink-faint);background:none;border:none;cursor:pointer;font-family:Karla,sans-serif;text-decoration:underline" onclick="deleteTeam('${ct.id}')">🗑 Supprimer l'équipe ${ct.name}</button>`:''}`;
+  ${ct?`<button style="margin-top:6px;font-size:.73rem;color:var(--ink-faint);background:none;border:none;cursor:pointer;font-family:Karla,sans-serif;text-decoration:underline" onclick="deleteTeam('${ct.id}')">🗑 Supprimer l'équipe ${ct.name}</button>`:''}
+  <div style="margin-top:14px;font-size:.73rem;color:var(--ink-faint);font-family:'JetBrains Mono',monospace">👤 ${myProfile?'Connecté en tant que <strong style="color:var(--ink-mid)">'+myProfile+'</strong>':'Profil non défini'} · <button style="background:none;border:none;color:var(--accent);cursor:pointer;font-family:inherit;font-size:inherit;text-decoration:underline;padding:0" onclick="changeProfile()">changer</button></div>`;
 }
 function selectTeam(id){currentTeamId=id;saveAll();renderPlayers();}
 function deleteTeam(id){if(!confirm('Supprimer cette équipe ?'))return;teams=teams.filter(t=>t.id!==id);players=players.filter(p=>p.teamId!==id);if(currentTeamId===id)currentTeamId=teams[0]?.id||null;saveAll();sbDeleteTeam(id);renderPlayers();}
@@ -1751,7 +1779,7 @@ function saveSession(){
     s=sessions.find(x=>x.id===editingSessId);
     if(s){ Object.assign(s,{date,title,exercises:exs,teamId}); }
   } else {
-    s={id:uid(),date,title,exercises:exs,teamId};
+    s={id:uid(),date,title,exercises:exs,teamId,createdBy:myProfile||''};
     sessions.push(s);
   }
   const rev={
@@ -1833,7 +1861,7 @@ function saveMatch(){
   if(!date){alert('Choisis une date.');return;}
   const role=matchRoleVal;
   const comment=document.getElementById('m-comment').value.trim();
-  let m={id:uid(),date,role,comment,teamId:currentTeamId};
+  let m={id:uid(),date,role,comment,teamId:currentTeamId,createdBy:myProfile||''};
 
   if(role==='arbitre'){
     m.type='arbitrage';
@@ -1868,10 +1896,26 @@ function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
 
+// ══ PROFIL ══════════════════════════════════════════════════
+function saveProfile(){
+  const v=document.getElementById('profile-name').value.trim();
+  if(!v) return;
+  myProfile=v;
+  LC.set('myProfile',v);
+  closeModal('modal-profile');
+  const view=document.querySelector('.nav-btn.active')?.dataset.view;
+  if(view && RENDERS[view]) RENDERS[view]();
+}
+function changeProfile(){
+  document.getElementById('profile-name').value=myProfile;
+  openModal('modal-profile');
+}
+
 // ══ INIT ════════════════════════════════════════════════════
 const _initialView=location.hash.replace('#','');
 if(_initialView && RENDERS[_initialView]) switchView(_initialView); else renderToday();
 loadFromSupabase();
+if(!myProfile) openModal('modal-profile');
 </script>
 </body>
 </html>
