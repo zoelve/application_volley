@@ -1847,7 +1847,8 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
 
 // ══ INIT ════════════════════════════════════════════════════
-renderToday();
+const _initialView=location.hash.replace('#','');
+if(_initialView && RENDERS[_initialView]) switchView(_initialView); else renderToday();
 loadFromSupabase();
 </script>
 </body>
